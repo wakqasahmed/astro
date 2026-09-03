@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import * as clack from '@clack/prompts';
@@ -28,7 +29,23 @@ export async function getPackage<T>(
 		const resolved = require.resolve(packageName, { paths: [options.cwd ?? process.cwd()] });
 		const packageImport = await import(pathToFileURL(resolved).href);
 		return packageImport as T;
-	} catch {
+	} catch (err) {
+		if (
+			packageName === 'typescript' &&
+			(err as NodeJS.ErrnoException)?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+		) {
+			try {
+				const packageJsonPath = require.resolve('typescript/package.json', {
+					paths: [options.cwd ?? process.cwd()],
+				});
+				const { version } = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+				if (typeof version === 'string' && /^(?:[7-9]|[1-9]\d+)\./.test(version)) {
+					return {} as T;
+				}
+			} catch {}
+			throw err;
+		}
+
 		if (options.optional) return undefined;
 		let message = `To continue, Astro requires the following dependency to be installed: ${bold(
 			packageName,

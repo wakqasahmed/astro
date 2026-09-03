@@ -37,4 +37,78 @@ describe('getPackage', () => {
 			await rm(projectDir, { recursive: true, force: true });
 		}
 	});
+
+	it('treats TypeScript 7 without a default export as installed', async () => {
+		const projectDir = join(tmpdir(), `astro-test-typescript-7-${Date.now()}`);
+		const pkgDir = join(projectDir, 'node_modules', 'typescript');
+
+		try {
+			await mkdir(pkgDir, { recursive: true });
+			await writeFile(
+				join(pkgDir, 'package.json'),
+				JSON.stringify({
+					name: 'typescript',
+					version: '7.0.0',
+					exports: { './package.json': './package.json' },
+				}),
+			);
+
+			const result = await getPackage('typescript', defaultLogger, {
+				cwd: projectDir,
+				optional: true,
+			});
+
+			assert.ok(result);
+		} finally {
+			await rm(projectDir, { recursive: true, force: true });
+		}
+	});
+
+	it('rethrows export-map errors for TypeScript versions before 7', async () => {
+		const projectDir = join(tmpdir(), `astro-test-typescript-6-${Date.now()}`);
+		const pkgDir = join(projectDir, 'node_modules', 'typescript');
+
+		try {
+			await mkdir(pkgDir, { recursive: true });
+			await writeFile(
+				join(pkgDir, 'package.json'),
+				JSON.stringify({
+					name: 'typescript',
+					version: '6.0.0',
+					exports: { './package.json': './package.json' },
+				}),
+			);
+
+			await assert.rejects(
+				getPackage('typescript', defaultLogger, { cwd: projectDir, optional: true }),
+				{ code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' },
+			);
+		} finally {
+			await rm(projectDir, { recursive: true, force: true });
+		}
+	});
+
+	it('rethrows export-map errors when the TypeScript package manifest cannot be read', async () => {
+		const projectDir = join(tmpdir(), `astro-test-typescript-unreadable-${Date.now()}`);
+		const pkgDir = join(projectDir, 'node_modules', 'typescript');
+
+		try {
+			await mkdir(pkgDir, { recursive: true });
+			await writeFile(
+				join(pkgDir, 'package.json'),
+				JSON.stringify({
+					name: 'typescript',
+					version: '7.0.0',
+					exports: { './package.json': './missing-package.json' },
+				}),
+			);
+
+			await assert.rejects(
+				getPackage('typescript', defaultLogger, { cwd: projectDir, optional: true }),
+				{ code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' },
+			);
+		} finally {
+			await rm(projectDir, { recursive: true, force: true });
+		}
+	});
 });
